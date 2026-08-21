@@ -256,9 +256,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const Spacer(),
 
               // Digital receipt note from screenshot
-              Row(
+              const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
                     'ⓘ ',
                     style: TextStyle(fontSize: 12, color: AppColors.textMuted),

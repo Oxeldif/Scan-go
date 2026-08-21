@@ -62,8 +62,10 @@ class LocalAuthFaceRecognitionService implements FaceRecognitionService {
 
       final bool authenticated = await _auth.authenticate(
         localizedReason: 'Please authenticate to access your ScanGo account.',
-        biometricOnly: false,
-        persistAcrossBackgrounding: true,
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+        ),
       );
 
       if (authenticated) {
@@ -71,10 +73,8 @@ class LocalAuthFaceRecognitionService implements FaceRecognitionService {
       } else {
         return FaceEnrollResult.failure('Authentication cancelled');
       }
-    } on LocalAuthException catch (e) {
-      return FaceEnrollResult.failure(e.description ?? 'LocalAuth error: ${e.code.name}');
     } on PlatformException catch (e) {
-      return FaceEnrollResult.failure(e.message ?? 'Platform auth error');
+      return FaceEnrollResult.failure(e.message ?? 'Platform auth error (${e.code})');
     } catch (e) {
       return FaceEnrollResult.failure('Auth error: $e');
     }

@@ -111,9 +111,9 @@ class PaymentFailedScreen extends StatelessWidget {
                         color: AppColors.failureBadgeBg,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(
                             Icons.circle,
                             size: 6,

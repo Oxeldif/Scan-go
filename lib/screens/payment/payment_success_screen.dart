@@ -105,9 +105,9 @@ class PaymentSuccessScreen extends StatelessWidget {
                         color: AppColors.successBadgeBg,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(
                             Icons.circle,
                             size: 6,

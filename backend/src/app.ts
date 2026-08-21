@@ -34,6 +34,8 @@ export const createApp = (): Express => {
   app.use('/api/cart', cartRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/orders', orderRoutes);
+  // Alias from the original plan
+  app.use('/api/checkout', orderRoutes);
 
   // Global Error Handler
   app.use(errorHandler);

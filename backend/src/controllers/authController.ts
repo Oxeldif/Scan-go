@@ -12,9 +12,10 @@ export class AuthController {
    */
   static async register(req: Request, res: Response) {
     try {
-      const { name, email, password, phone } = req.body;
+      const { name, fullName, email, password, phone } = req.body;
+      const displayName = (name || fullName || '').toString().trim();
 
-      if (!name || !email || !password) {
+      if (!displayName || !email || !password) {
         return res.status(400).json({
           success: false,
           message: 'Please provide name, email, and password.',
@@ -36,7 +37,7 @@ export class AuthController {
 
       const user = await prisma.user.create({
         data: {
-          name,
+          name: displayName,
           email: email.toLowerCase().trim(),
           phone: phone || null,
           password: passwordHash,
@@ -46,6 +47,7 @@ export class AuthController {
           name: true,
           email: true,
           phone: true,
+          faceEnrolled: true,
           createdAt: true,
         },
       });
@@ -125,6 +127,7 @@ export class AuthController {
             name: user.name,
             email: user.email,
             phone: user.phone,
+            faceEnrolled: user.faceEnrolled,
           },
           token,
           activeCart: CartService.formatCartResponse(activeSession),
@@ -156,6 +159,7 @@ export class AuthController {
           name: true,
           email: true,
           phone: true,
+          faceEnrolled: true,
           createdAt: true,
         },
       });
@@ -173,6 +177,109 @@ export class AuthController {
       return res.status(500).json({
         success: false,
         message: 'Error fetching user profile',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Register Face ID against the logged-in account.
+   * The mobile app captures the face locally; this endpoint stores enrollment status.
+   */
+  static async enrollFace(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
+      const user = await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          faceEnrolled: true,
+          faceEnrolledAt: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          faceEnrolled: true,
+          faceEnrolledAt: true,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Face enrolled successfully',
+        data: { user },
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to enroll Face ID',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Verify Face ID for the logged-in user and optionally secure the active cart session.
+   */
+  static async verifyFace(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          faceEnrolled: true,
+        },
+      });
+
+      if (!user) {
+        return res.status(401).json({ success: false, message: 'User not found' });
+      }
+
+      const { cartCode } = req.body || {};
+      let activeCart = await CartService.getActiveSessionByUserId(user.id);
+
+      if (cartCode && !activeCart) {
+        return res.status(404).json({
+          success: false,
+          message: 'No active cart session found. Pair a cart first.',
+        });
+      }
+
+      if (activeCart && !activeCart.faceVerified) {
+        activeCart = await CartService.verifySessionFace(activeCart.id);
+      }
+
+      const formatted = CartService.formatCartResponse(activeCart);
+
+      return res.json({
+        success: true,
+        message: 'Face verified successfully',
+        data: {
+          user,
+          userId: user.id,
+          token: jwt.sign(
+            { id: user.id, email: user.email, name: user.name },
+            ENV.JWT_SECRET,
+            { expiresIn: '30d' }
+          ),
+          activeCart: formatted,
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to verify Face ID',
         error: error.message,
       });
     }

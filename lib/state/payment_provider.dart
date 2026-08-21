@@ -18,6 +18,12 @@ class PaymentProvider extends ChangeNotifier {
   String? _transactionId;
   String? get transactionId => _transactionId;
 
+  String? _exitQrCode;
+  String? get exitQrCode => _exitQrCode;
+
+  String? _orderNumber;
+  String? get orderNumber => _orderNumber;
+
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
@@ -39,6 +45,8 @@ class PaymentProvider extends ChangeNotifier {
     if (result.isSuccess) {
       _status = PaymentProcessingStatus.success;
       _transactionId = result.transactionId;
+      _exitQrCode = result.exitQrCode;
+      _orderNumber = result.orderNumber;
       _errorMessage = null;
     } else {
       _status = PaymentProcessingStatus.failed;
@@ -51,6 +59,8 @@ class PaymentProvider extends ChangeNotifier {
   void reset() {
     _status = PaymentProcessingStatus.idle;
     _transactionId = null;
+    _exitQrCode = null;
+    _orderNumber = null;
     _errorMessage = null;
     notifyListeners();
   }

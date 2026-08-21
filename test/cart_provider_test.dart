@@ -10,7 +10,7 @@ void main() {
 
     setUp(() {
       cvService = MockComputerVisionService();
-      cartProvider = CartProvider(cvService);
+      cartProvider = CartProvider(cvService: cvService);
     });
 
     tearDown(() {

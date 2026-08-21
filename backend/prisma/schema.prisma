@@ -13,6 +13,8 @@ model User {
   email            String            @unique
   phone            String?
   password         String
+  faceEnrolled     Boolean           @default(false)
+  faceEnrolledAt   DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   shoppingSessions ShoppingSession[]

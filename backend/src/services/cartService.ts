@@ -89,8 +89,8 @@ export class CartService {
       };
     });
 
-    const tax = 0;
-    const grandTotal = subtotal + tax;
+    const tax = parseFloat((subtotal * 0.03).toFixed(2));
+    const grandTotal = parseFloat((subtotal + tax).toFixed(2));
 
     return {
       sessionId: session.id,

@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../state/auth_provider.dart';
 import '../../widgets/primary_button.dart';
-import '../cart/cart_screen.dart';
+import '../cart/pair_cart_screen.dart';
 
 class FaceEnrollmentScreen extends StatefulWidget {
   const FaceEnrollmentScreen({super.key});
@@ -123,7 +123,7 @@ class _FaceEnrollmentScreenState extends State<FaceEnrollmentScreen> {
       await Future.delayed(const Duration(milliseconds: 900));
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const CartScreen()),
+          MaterialPageRoute(builder: (_) => const PairCartScreen()),
           (route) => false,
         );
       }

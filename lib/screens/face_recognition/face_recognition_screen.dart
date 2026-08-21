@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../state/auth_provider.dart';
+import '../../state/cart_provider.dart';
 import '../../widgets/primary_button.dart';
+import '../auth/login_screen.dart';
 import '../cart/cart_screen.dart';
+import '../cart/pair_cart_screen.dart';
 
 class FaceRecognitionScreen extends StatefulWidget {
   const FaceRecognitionScreen({super.key});
@@ -114,15 +117,22 @@ class _FaceRecognitionScreenState extends State<FaceRecognitionScreen> {
     if (!mounted) return;
 
     if (success) {
-      // Short delay after "Verified" state appears, then navigate to Cart
       await Future.delayed(const Duration(milliseconds: 900));
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const CartScreen(),
-          ),
-        );
+      if (!mounted) return;
+      final hasActiveCart = authProvider.activeCart != null;
+      if (hasActiveCart) {
+        await Provider.of<CartProvider>(context, listen: false).loadActiveCart();
       }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => hasActiveCart ? const CartScreen() : const PairCartScreen(),
+        ),
+      );
+    } else if ((authProvider.errorMessage ?? '').contains('sign in')) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
     } else {
       // Show error snackbar if face recognition failed or network error
       final errorMessage = authProvider.errorMessage ?? 'Verification failed. Please try again.';

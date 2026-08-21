@@ -41,6 +41,8 @@ class ApiClient {
   })  : _client = client ?? http.Client(),
         _tokenStorage = tokenStorage ?? TokenStorageService();
 
+  TokenStorageService get tokenStorage => _tokenStorage;
+
   Future<Map<String, String>> _getHeaders({bool isJson = true}) async {
     final headers = <String, String>{};
     if (isJson) {

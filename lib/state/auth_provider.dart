@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/constants/app_constants.dart';
 import '../models/shopping_session.dart';
 import '../models/user.dart';
 import '../services/auth/auth_api_service.dart';
@@ -41,6 +42,9 @@ class AuthProvider extends ChangeNotifier {
   ShoppingSession? _currentSession;
   ShoppingSession? get currentSession => _currentSession;
 
+  Map<String, dynamic>? _activeCart;
+  Map<String, dynamic>? get activeCart => _activeCart;
+
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
@@ -71,23 +75,16 @@ class AuthProvider extends ChangeNotifier {
     );
 
     if (result.isSuccess && result.user != null) {
-      _currentUser = result.user;
-      _token = result.token;
-      if (_token != null) {
-        await _tokenStorage.saveToken(_token!);
-      }
-      if (_currentUser != null) {
-        await _tokenStorage.saveUserId(_currentUser!.id);
-      }
+      await _persistAuth(result);
       _status = AuthStatus.registered;
       notifyListeners();
       return true;
-    } else {
-      _status = AuthStatus.failed;
-      _errorMessage = result.errorMessage ?? 'Registration failed.';
-      notifyListeners();
-      return false;
     }
+
+    _status = AuthStatus.failed;
+    _errorMessage = result.errorMessage ?? 'Registration failed.';
+    notifyListeners();
+    return false;
   }
 
   Future<bool> login({
@@ -104,25 +101,37 @@ class AuthProvider extends ChangeNotifier {
     );
 
     if (result.isSuccess && result.user != null) {
-      _currentUser = result.user;
-      _token = result.token;
-      if (_token != null) {
-        await _tokenStorage.saveToken(_token!);
-      }
-      if (_currentUser != null) {
-        await _tokenStorage.saveUserId(_currentUser!.id);
-      }
-      // Create shopping session
-      await startShoppingSession();
+      await _persistAuth(result);
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;
-    } else {
-      _status = AuthStatus.failed;
-      _errorMessage = result.errorMessage ?? 'Login failed.';
-      notifyListeners();
-      return false;
     }
+
+    _status = AuthStatus.failed;
+    _errorMessage = result.errorMessage ?? 'Login failed.';
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> restoreSession() async {
+    final token = await _tokenStorage.getToken();
+    if (token == null || token.isEmpty) return false;
+    _token = token;
+    final result = await _authApiService.getMe();
+    if (result.isSuccess && result.user != null) {
+      _currentUser = result.user;
+      _activeCart = result.activeCart;
+      if (_activeCart != null) {
+        _currentSession = ShoppingSession.fromJson({
+          ..._activeCart!,
+          'userId': _currentUser!.id,
+        });
+      }
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 
   Future<bool> enrollFace({
@@ -149,16 +158,15 @@ class AuthProvider extends ChangeNotifier {
 
     if (result.isSuccess) {
       _status = AuthStatus.faceEnrolled;
-      await startShoppingSession();
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;
-    } else {
-      _status = AuthStatus.failed;
-      _errorMessage = result.errorMessage ?? 'Face enrollment failed.';
-      notifyListeners();
-      return false;
     }
+
+    _status = AuthStatus.failed;
+    _errorMessage = result.errorMessage ?? 'Face enrollment failed.';
+    notifyListeners();
+    return false;
   }
 
   Future<bool> verifyFace({
@@ -170,46 +178,44 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+    final restored = _currentUser != null || await restoreSession();
+    if (!restored && _currentUser == null) {
+      _status = AuthStatus.failed;
+      _errorMessage = 'Please sign in first, then use Face ID.';
+      notifyListeners();
+      return false;
+    }
+
     final result = await faceService.verifyFace(
       imagePath: imagePath,
       imageBytes: imageBytes,
       cartCode: cartCode,
     );
 
-    if (result.isSuccess && result.userId != null) {
-      final userId = result.userId!;
-      _token = result.token;
-      if (_token != null) {
+    if (result.isSuccess) {
+      if (result.token != null && result.token!.isNotEmpty && result.token != 'mock_jwt_token_123') {
+        _token = result.token;
         await _tokenStorage.saveToken(_token!);
       }
-      await _tokenStorage.saveUserId(userId);
-
-      _currentUser = User(
-        id: userId,
-        fullName: 'ScanGo Customer',
-        email: '',
-        phone: '',
-      );
-
-      // Create / retrieve shopping session for identified customer
-      await startShoppingSession(cartCode: cartCode);
-
+      if (result.userId != null && result.userId!.isNotEmpty && !result.userId!.startsWith('mock_')) {
+        await _tokenStorage.saveUserId(result.userId!);
+      }
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;
-    } else {
-      _status = AuthStatus.failed;
-      _errorMessage = result.errorMessage ?? 'Face not recognized.';
-      notifyListeners();
-      return false;
     }
+
+    _status = AuthStatus.failed;
+    _errorMessage = result.errorMessage ?? 'Face not recognized.';
+    notifyListeners();
+    return false;
   }
 
   Future<bool> startShoppingSession({String? cartCode}) async {
     final userId = _currentUser?.id ?? await _tokenStorage.getUserId() ?? 'user_anonymous';
     final session = await _authApiService.createShoppingSession(
       userId: userId,
-      cartCode: cartCode,
+      cartCode: cartCode ?? AppConstants.defaultCartCode,
     );
     _currentSession = session;
     if (session != null) {
@@ -217,6 +223,27 @@ class AuthProvider extends ChangeNotifier {
     }
     notifyListeners();
     return session != null;
+  }
+
+  Future<void> _persistAuth(AuthResult result) async {
+    _currentUser = result.user;
+    _token = result.token;
+    _activeCart = result.activeCart;
+    if (_token != null && _token!.isNotEmpty) {
+      await _tokenStorage.saveToken(_token!);
+    }
+    if (_currentUser != null) {
+      await _tokenStorage.saveUserId(_currentUser!.id);
+    }
+    if (_activeCart != null) {
+      _currentSession = ShoppingSession.fromJson({
+        ..._activeCart!,
+        'userId': _currentUser?.id,
+      });
+      if (_currentSession!.sessionId.isNotEmpty) {
+        await _tokenStorage.saveSessionId(_currentSession!.sessionId);
+      }
+    }
   }
 
   void reset() {
@@ -229,6 +256,7 @@ class AuthProvider extends ChangeNotifier {
     _currentUser = null;
     _token = null;
     _currentSession = null;
+    _activeCart = null;
     _status = AuthStatus.initial;
     _errorMessage = null;
     await _tokenStorage.clearAll();

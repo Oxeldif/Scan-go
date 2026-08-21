@@ -1,21 +1,16 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import '../../core/constants/app_constants.dart';
+import 'dart:typed_data';
+import '../core/constants/app_constants.dart';
+import 'api_client.dart';
 import 'face_recognition_service.dart';
 import 'token_storage_service.dart';
 
 class ApiFaceRecognitionService implements FaceRecognitionService {
-  final http.Client _client;
-  final TokenStorageService _tokenStorage;
+  final ApiClient _apiClient;
 
   ApiFaceRecognitionService({
-    http.Client? client,
+    ApiClient? apiClient,
     TokenStorageService? tokenStorage,
-  })  : _client = client ?? http.Client(),
-        _tokenStorage = tokenStorage ?? TokenStorageService();
+  }) : _apiClient = apiClient ?? ApiClient(tokenStorage: tokenStorage ?? TokenStorageService());
 
   @override
   Future<void> initialize() async {}
@@ -26,72 +21,25 @@ class ApiFaceRecognitionService implements FaceRecognitionService {
     required String imagePath,
     Uint8List? imageBytes,
   }) async {
-    try {
-      final uri = Uri.parse(AppConstants.faceEnrollEndpoint);
-      final request = http.MultipartRequest('POST', uri);
+    final response = await _apiClient.post(
+      AppConstants.faceEnrollEndpoint,
+      body: {
+        'userId': userId,
+        'enrolled': true,
+      },
+    );
 
-      // Form fields
-      request.fields['userId'] = userId;
-      request.fields['timestamp'] = DateTime.now().toIso8601String();
-
-      // Authorization header if available
-      final token = await _tokenStorage.getToken();
-      if (token != null && token.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $token';
+    if (response.isSuccess) {
+      String? message;
+      if (response.data is Map) {
+        message = (response.data as Map)['message']?.toString();
       }
-
-      // Add face image file
-      if (imageBytes != null || kIsWeb) {
-        final bytes = imageBytes ?? await File(imagePath).readAsBytes();
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'faceImage',
-            bytes,
-            filename: 'face_enroll_$userId.jpg',
-          ),
-        );
-      } else {
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'faceImage',
-            imagePath,
-            filename: 'face_enroll_$userId.jpg',
-          ),
-        );
-      }
-
-      final streamedResponse = await _client.send(request).timeout(
-            const Duration(seconds: 20),
-          );
-      final response = await http.Response.fromStream(streamedResponse);
-
-      dynamic jsonResponse;
-      try {
-        jsonResponse = jsonDecode(response.body);
-      } catch (_) {
-        jsonResponse = {'message': response.body};
-      }
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return FaceEnrollResult.success(
-          message: jsonResponse is Map ? jsonResponse['message']?.toString() : null,
-        );
-      } else {
-        final errorMsg = (jsonResponse is Map && jsonResponse['message'] != null)
-            ? jsonResponse['message'].toString()
-            : 'Face enrollment failed (${response.statusCode})';
-        return FaceEnrollResult.failure(errorMsg, statusCode: response.statusCode);
-      }
-    } on TimeoutException {
-      return FaceEnrollResult.failure(
-        'Face enrollment timed out. Please check backend connection.',
-        statusCode: 408,
-      );
-    } catch (e) {
-      return FaceEnrollResult.failure('Enrollment network error: $e');
-    } finally {
-      _cleanupTempFile(imagePath);
+      return FaceEnrollResult.success(message: message);
     }
+    return FaceEnrollResult.failure(
+      response.errorMessage ?? 'Face enrollment failed',
+      statusCode: response.statusCode,
+    );
   }
 
   @override
@@ -100,93 +48,41 @@ class ApiFaceRecognitionService implements FaceRecognitionService {
     Uint8List? imageBytes,
     String? cartCode,
   }) async {
-    try {
-      final uri = Uri.parse(AppConstants.faceVerifyEndpoint);
-      final request = http.MultipartRequest('POST', uri);
+    final response = await _apiClient.post(
+      AppConstants.faceVerifyEndpoint,
+      body: {
+        if (cartCode != null) 'cartCode': cartCode,
+      },
+    );
 
-      if (cartCode != null) {
-        request.fields['cartCode'] = cartCode;
-      }
-      request.fields['timestamp'] = DateTime.now().toIso8601String();
-
-      // Add face image file
-      if (imageBytes != null || kIsWeb) {
-        final bytes = imageBytes ?? await File(imagePath).readAsBytes();
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'faceImage',
-            bytes,
-            filename: 'face_verify_${DateTime.now().millisecondsSinceEpoch}.jpg',
-          ),
-        );
-      } else {
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'faceImage',
-            imagePath,
-            filename: 'face_verify_${DateTime.now().millisecondsSinceEpoch}.jpg',
-          ),
-        );
-      }
-
-      final streamedResponse = await _client.send(request).timeout(
-            const Duration(seconds: 20),
-          );
-      final response = await http.Response.fromStream(streamedResponse);
-
-      dynamic jsonResponse;
-      try {
-        jsonResponse = jsonDecode(response.body);
-      } catch (_) {
-        jsonResponse = {'message': response.body};
-      }
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (jsonResponse is Map && jsonResponse['success'] == true) {
-          final userId = jsonResponse['userId']?.toString() ?? '';
-          final token = jsonResponse['token']?.toString() ?? '';
-          return FaceVerificationResult.success(
-            userId: userId,
-            token: token,
-            message: jsonResponse['message']?.toString(),
-          );
-        } else if (jsonResponse is Map && jsonResponse['success'] == false) {
-          return FaceVerificationResult.failure(
-            jsonResponse['message']?.toString() ?? 'Face not recognized.',
-            statusCode: response.statusCode,
-          );
-        }
-        return FaceVerificationResult.success(
-          userId: jsonResponse is Map ? jsonResponse['userId']?.toString() ?? '' : '',
-          token: jsonResponse is Map ? jsonResponse['token']?.toString() ?? '' : '',
-        );
-      } else {
-        final errorMsg = (jsonResponse is Map && jsonResponse['message'] != null)
-            ? jsonResponse['message'].toString()
-            : 'Face verification failed (${response.statusCode})';
-        return FaceVerificationResult.failure(errorMsg, statusCode: response.statusCode);
-      }
-    } on TimeoutException {
+    if (!response.isSuccess) {
       return FaceVerificationResult.failure(
-        'Face verification timed out. Please check backend connection.',
-        statusCode: 408,
+        response.errorMessage ?? 'Face verification failed',
+        statusCode: response.statusCode,
       );
-    } catch (e) {
-      return FaceVerificationResult.failure('Verification network error: $e');
-    } finally {
-      _cleanupTempFile(imagePath);
     }
-  }
 
-  void _cleanupTempFile(String path) {
-    if (!kIsWeb && path.isNotEmpty) {
-      try {
-        final file = File(path);
-        if (file.existsSync()) {
-          file.deleteSync();
-        }
-      } catch (_) {}
+    Map<String, dynamic> payload = {};
+    if (response.data is Map) {
+      final root = Map<String, dynamic>.from(response.data as Map);
+      if (root['data'] is Map) {
+        payload = Map<String, dynamic>.from(root['data'] as Map);
+      } else {
+        payload = root;
+      }
     }
+
+    final user = payload['user'];
+    final userId = payload['userId']?.toString() ??
+        (user is Map ? user['id']?.toString() : null) ??
+        '';
+    final token = payload['token']?.toString() ?? '';
+
+    return FaceVerificationResult.success(
+      userId: userId,
+      token: token,
+      message: payload['message']?.toString() ?? 'Face verified successfully',
+    );
   }
 
   @override

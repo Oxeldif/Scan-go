@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../state/auth_provider.dart';
+import '../../state/cart_provider.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/scango_logo.dart';
 import '../cart/cart_screen.dart';
+import '../cart/pair_cart_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -39,10 +41,16 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
+      final hasActiveCart = authProvider.activeCart != null;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const CartScreen()),
+        MaterialPageRoute(
+          builder: (_) => hasActiveCart ? const CartScreen() : const PairCartScreen(),
+        ),
         (route) => false,
       );
+      if (hasActiveCart) {
+        Provider.of<CartProvider>(context, listen: false).loadActiveCart();
+      }
     } else {
       final error = authProvider.errorMessage ?? 'Login failed. Please check your credentials.';
       ScaffoldMessenger.of(context).showSnackBar(

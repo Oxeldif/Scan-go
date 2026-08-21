@@ -7,19 +7,23 @@ class AuthResult {
   final bool isSuccess;
   final User? user;
   final String? token;
+  final ShoppingSession? activeSession;
   final String? errorMessage;
 
   const AuthResult({
     required this.isSuccess,
     this.user,
     this.token,
+    this.activeSession,
     this.errorMessage,
   });
 
-  factory AuthResult.success(User user, String token) => AuthResult(
+  factory AuthResult.success(User user, String token, {ShoppingSession? activeSession}) =>
+      AuthResult(
         isSuccess: true,
         user: user,
         token: token,
+        activeSession: activeSession,
       );
 
   factory AuthResult.failure(String message) => AuthResult(
@@ -42,7 +46,7 @@ class AuthApiService {
     final response = await _apiClient.post(
       AppConstants.registerEndpoint,
       body: {
-        'fullName': fullName,
+        'name': fullName,
         'email': email,
         'phone': phone,
         'password': password,
@@ -50,16 +54,13 @@ class AuthApiService {
     );
 
     if (response.isSuccess && response.data is Map) {
-      final data = response.data as Map;
-      final userId = data['userId']?.toString() ?? data['id']?.toString() ?? '';
-      final token = data['token']?.toString() ?? '';
+      final rootData = response.data as Map;
+      final payload = rootData['data'] is Map ? rootData['data'] as Map : rootData;
 
-      final user = User(
-        id: userId,
-        fullName: data['fullName']?.toString() ?? fullName,
-        email: data['email']?.toString() ?? email,
-        phone: data['phone']?.toString() ?? phone,
-      );
+      final userData = payload['user'] is Map ? payload['user'] as Map : payload;
+      final token = payload['token']?.toString() ?? '';
+
+      final user = User.fromJson(Map<String, dynamic>.from(userData));
 
       return AuthResult.success(user, token);
     } else {
@@ -82,18 +83,24 @@ class AuthApiService {
     );
 
     if (response.isSuccess && response.data is Map) {
-      final data = response.data as Map;
-      final userId = data['userId']?.toString() ?? data['id']?.toString() ?? '';
-      final token = data['token']?.toString() ?? '';
+      final rootData = response.data as Map;
+      final payload = rootData['data'] is Map ? rootData['data'] as Map : rootData;
 
-      final user = User(
-        id: userId,
-        fullName: data['fullName']?.toString() ?? data['name']?.toString() ?? 'ScanGo Customer',
-        email: data['email']?.toString() ?? email,
-        phone: data['phone']?.toString() ?? '',
-      );
+      final userData = payload['user'] is Map ? payload['user'] as Map : payload;
+      final token = payload['token']?.toString() ?? '';
 
-      return AuthResult.success(user, token);
+      final user = User.fromJson(Map<String, dynamic>.from(userData));
+
+      ShoppingSession? activeSession;
+      if (payload['activeCart'] is Map) {
+        try {
+          activeSession = ShoppingSession.fromJson(
+            Map<String, dynamic>.from(payload['activeCart'] as Map),
+          );
+        } catch (_) {}
+      }
+
+      return AuthResult.success(user, token, activeSession: activeSession);
     } else {
       return AuthResult.failure(
         response.errorMessage ?? 'Invalid email or password.',
@@ -101,27 +108,44 @@ class AuthApiService {
     }
   }
 
-  Future<ShoppingSession?> createShoppingSession({
-    required String userId,
+  Future<ShoppingSession?> pairCart({
     String? cartCode,
+    bool faceVerified = false,
   }) async {
     final response = await _apiClient.post(
-      AppConstants.sessionEndpoint,
+      AppConstants.pairCartEndpoint,
       body: {
-        'userId': userId,
-        'cartCode': cartCode ?? 'cart_default',
+        'cartCode': cartCode ?? AppConstants.defaultCartCode,
+        'faceVerified': faceVerified,
       },
     );
 
     if (response.isSuccess && response.data is Map) {
-      return ShoppingSession.fromJson(Map<String, dynamic>.from(response.data as Map));
+      final rootData = response.data as Map;
+      final payload = rootData['data'] is Map ? rootData['data'] as Map : rootData;
+      return ShoppingSession.fromJson(Map<String, dynamic>.from(payload));
     }
-    // Return a valid local session if backend session creation is in-progress
-    return ShoppingSession(
-      sessionId: 'sess_${DateTime.now().millisecondsSinceEpoch}',
-      cartId: cartCode ?? 'cart_default',
-      userId: userId,
-      createdAt: DateTime.now(),
-    );
+    return null;
+  }
+
+  Future<ShoppingSession?> verifyCartFace() async {
+    final response = await _apiClient.post(AppConstants.verifyFaceEndpoint);
+    if (response.isSuccess && response.data is Map) {
+      final rootData = response.data as Map;
+      final payload = rootData['data'] is Map ? rootData['data'] as Map : rootData;
+      return ShoppingSession.fromJson(Map<String, dynamic>.from(payload));
+    }
+    return null;
+  }
+
+  Future<ShoppingSession?> getActiveCart() async {
+    final response = await _apiClient.get(AppConstants.activeCartEndpoint);
+    if (response.isSuccess && response.data is Map) {
+      final rootData = response.data as Map;
+      if (rootData['data'] is Map) {
+        return ShoppingSession.fromJson(Map<String, dynamic>.from(rootData['data'] as Map));
+      }
+    }
+    return null;
   }
 }

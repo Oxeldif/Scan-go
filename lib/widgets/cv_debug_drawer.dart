@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../repositories/product_repository.dart';
+import '../services/cart/cart_api_service.dart';
 import '../services/mock_computer_vision_service.dart';
+import '../state/auth_provider.dart';
 
 class CvDebugPanel extends StatelessWidget {
   final MockComputerVisionService cvService;
@@ -10,6 +13,42 @@ class CvDebugPanel extends StatelessWidget {
     super.key,
     required this.cvService,
   });
+
+  void _triggerAiDetection(
+    BuildContext context, {
+    dynamic productId,
+    String? barcode,
+    String? label,
+    String action = 'added',
+  }) {
+    final cartApiService = Provider.of<CartApiService>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final cartCode = authProvider.currentSession?.cartCode ?? 'CART_01';
+
+    // 1. Send real AI Webhook to backend if available
+    cartApiService.sendAiDetectionWebhook(
+      cartCode: cartCode,
+      productId: productId,
+      barcode: barcode,
+      label: label,
+      action: action,
+    );
+
+    // 2. Also emit locally for offline testing
+    if (action == 'added') {
+      if (productId == ProductRepository.doritos.id || label?.contains('Doritos') == true) {
+        cvService.simulateAddProduct(ProductRepository.doritos);
+      } else if (productId == ProductRepository.tuna.id || label?.contains('Tuna') == true) {
+        cvService.simulateAddProduct(ProductRepository.tuna);
+      } else if (productId == ProductRepository.honey.id || label?.contains('Honey') == true) {
+        cvService.simulateAddProduct(ProductRepository.honey);
+      }
+    } else {
+      if (productId == ProductRepository.doritos.id || label?.contains('Doritos') == true) {
+        cvService.simulateRemoveProduct(ProductRepository.doritos.id);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +76,7 @@ class CvDebugPanel extends StatelessWidget {
           ),
         ),
         subtitle: const Text(
-          'Simulate physical cart computer vision events',
+          'Simulate physical cart computer vision & AI events',
           style: TextStyle(fontSize: 10, color: Colors.black54),
         ),
         children: [
@@ -49,35 +88,71 @@ class CvDebugPanel extends StatelessWidget {
               children: [
                 ElevatedButton.icon(
                   onPressed: () {
-                    cvService.simulateAddProduct(ProductRepository.doritos);
+                    _triggerAiDetection(
+                      context,
+                      productId: ProductRepository.doritos.id,
+                      barcode: ProductRepository.doritos.barcode,
+                      label: ProductRepository.doritos.name,
+                      action: 'added',
+                    );
                   },
                   icon: const Icon(Icons.add, size: 14),
                   label: const Text('Add Doritos (\$10)', style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade700, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade700,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
-                    cvService.simulateAddProduct(ProductRepository.tuna);
+                    _triggerAiDetection(
+                      context,
+                      productId: ProductRepository.tuna.id,
+                      barcode: ProductRepository.tuna.barcode,
+                      label: ProductRepository.tuna.name,
+                      action: 'added',
+                    );
                   },
                   icon: const Icon(Icons.add, size: 14),
                   label: const Text('Add Tuna (\$65)', style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade700,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
-                    cvService.simulateAddProduct(ProductRepository.honey);
+                    _triggerAiDetection(
+                      context,
+                      productId: ProductRepository.honey.id,
+                      barcode: ProductRepository.honey.barcode,
+                      label: ProductRepository.honey.name,
+                      action: 'added',
+                    );
                   },
                   icon: const Icon(Icons.add, size: 14),
                   label: const Text('Add Honey (\$145)', style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber.shade800,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
-                    cvService.simulateRemoveProduct(ProductRepository.doritos.id);
+                    _triggerAiDetection(
+                      context,
+                      productId: ProductRepository.doritos.id,
+                      barcode: ProductRepository.doritos.barcode,
+                      label: ProductRepository.doritos.name,
+                      action: 'removed',
+                    );
                   },
                   icon: const Icon(Icons.remove, size: 14),
                   label: const Text('Remove Doritos', style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
@@ -85,7 +160,10 @@ class CvDebugPanel extends StatelessWidget {
                   },
                   icon: const Icon(Icons.cleaning_services, size: 14),
                   label: const Text('Clear Cart', style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade800, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade800,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),

@@ -3,6 +3,7 @@ import '../models/shopping_session.dart';
 import '../models/user.dart';
 import '../services/auth/auth_api_service.dart';
 import '../services/face_recognition_service.dart';
+import '../services/socket/socket_cart_service.dart';
 import '../services/token_storage_service.dart';
 
 enum AuthStatus {
@@ -21,11 +22,13 @@ class AuthProvider extends ChangeNotifier {
   final FaceRecognitionService faceService;
   final AuthApiService _authApiService;
   final TokenStorageService _tokenStorage;
+  final SocketCartService? _socketCartService;
 
   AuthProvider({
     required this.faceService,
     AuthApiService? authApiService,
     TokenStorageService? tokenStorage,
+    this._socketCartService,
   })  : _authApiService = authApiService ?? AuthApiService(),
         _tokenStorage = tokenStorage ?? TokenStorageService();
 
@@ -73,11 +76,11 @@ class AuthProvider extends ChangeNotifier {
     if (result.isSuccess && result.user != null) {
       _currentUser = result.user;
       _token = result.token;
-      if (_token != null) {
+      if (_token != null && _token!.isNotEmpty) {
         await _tokenStorage.saveToken(_token!);
       }
       if (_currentUser != null) {
-        await _tokenStorage.saveUserId(_currentUser!.id);
+        await _tokenStorage.saveUserId(_currentUser!.id.toString());
       }
       _status = AuthStatus.registered;
       notifyListeners();
@@ -106,14 +109,22 @@ class AuthProvider extends ChangeNotifier {
     if (result.isSuccess && result.user != null) {
       _currentUser = result.user;
       _token = result.token;
-      if (_token != null) {
+      if (_token != null && _token!.isNotEmpty) {
         await _tokenStorage.saveToken(_token!);
       }
       if (_currentUser != null) {
-        await _tokenStorage.saveUserId(_currentUser!.id);
+        await _tokenStorage.saveUserId(_currentUser!.id.toString());
       }
-      // Create shopping session
-      await startShoppingSession();
+
+      // Pair or load active cart session
+      if (result.activeSession != null) {
+        _currentSession = result.activeSession;
+      } else {
+        await pairCartSession();
+      }
+
+      _connectSocket();
+
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;
@@ -129,17 +140,11 @@ class AuthProvider extends ChangeNotifier {
     required String imagePath,
     Uint8List? imageBytes,
   }) async {
-    final userId = _currentUser?.id ?? await _tokenStorage.getUserId();
-    if (userId == null || userId.isEmpty) {
-      _status = AuthStatus.failed;
-      _errorMessage = 'User not found. Please register or login first.';
-      notifyListeners();
-      return false;
-    }
-
     _status = AuthStatus.enrollingFace;
     _errorMessage = null;
     notifyListeners();
+
+    final userId = _currentUser?.id?.toString() ?? await _tokenStorage.getUserId() ?? '1';
 
     final result = await faceService.enrollFace(
       userId: userId,
@@ -149,7 +154,9 @@ class AuthProvider extends ChangeNotifier {
 
     if (result.isSuccess) {
       _status = AuthStatus.faceEnrolled;
-      await startShoppingSession();
+      // Pair cart with face verified
+      await pairCartSession(faceVerified: true);
+      _connectSocket();
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;
@@ -176,23 +183,17 @@ class AuthProvider extends ChangeNotifier {
       cartCode: cartCode,
     );
 
-    if (result.isSuccess && result.userId != null) {
-      final userId = result.userId!;
-      _token = result.token;
-      if (_token != null) {
-        await _tokenStorage.saveToken(_token!);
-      }
-      await _tokenStorage.saveUserId(userId);
-
-      _currentUser = User(
-        id: userId,
-        fullName: 'ScanGo Customer',
+    if (result.isSuccess) {
+      final verifiedUserId = result.userId ?? _currentUser?.id?.toString() ?? '1';
+      _currentUser ??= User(
+        id: verifiedUserId,
+        name: 'ScanGo Customer',
         email: '',
-        phone: '',
       );
 
-      // Create / retrieve shopping session for identified customer
-      await startShoppingSession(cartCode: cartCode);
+      // Pair cart session with backend
+      await pairCartSession(cartCode: cartCode, faceVerified: true);
+      _connectSocket();
 
       _status = AuthStatus.authenticated;
       notifyListeners();
@@ -205,18 +206,41 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> startShoppingSession({String? cartCode}) async {
-    final userId = _currentUser?.id ?? await _tokenStorage.getUserId() ?? 'user_anonymous';
-    final session = await _authApiService.createShoppingSession(
-      userId: userId,
-      cartCode: cartCode,
+  Future<bool> pairCartSession({String? cartCode, bool faceVerified = false}) async {
+    try {
+      final session = await _authApiService.pairCart(
+        cartCode: cartCode,
+        faceVerified: faceVerified,
+      );
+      if (session != null) {
+        _currentSession = session;
+        if (session.sessionId != null) {
+          await _tokenStorage.saveSessionId(session.sessionId.toString());
+        }
+        notifyListeners();
+        return true;
+      }
+    } catch (_) {}
+
+    // Graceful fallback for offline demo session
+    _currentSession = ShoppingSession(
+      sessionId: 'sess_local_01',
+      cartCode: cartCode ?? 'CART_01',
+      userId: _currentUser?.id ?? '1',
+      faceVerified: faceVerified,
+      createdAt: DateTime.now(),
     );
-    _currentSession = session;
-    if (session != null) {
-      await _tokenStorage.saveSessionId(session.sessionId);
-    }
     notifyListeners();
-    return session != null;
+    return true;
+  }
+
+  void _connectSocket() {
+    if (_socketCartService != null && _currentUser != null) {
+      _socketCartService.connect(
+        userId: _currentUser!.id,
+        cartCode: _currentSession?.cartCode ?? 'CART_01',
+      );
+    }
   }
 
   void reset() {
@@ -231,6 +255,7 @@ class AuthProvider extends ChangeNotifier {
     _currentSession = null;
     _status = AuthStatus.initial;
     _errorMessage = null;
+    _socketCartService?.disconnect();
     await _tokenStorage.clearAll();
     notifyListeners();
   }

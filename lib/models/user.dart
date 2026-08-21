@@ -1,29 +1,31 @@
 class User {
-  final String id;
-  final String fullName;
+  final dynamic id;
+  final String name;
   final String email;
-  final String phone;
+  final String? phone;
 
   const User({
     required this.id,
-    required this.fullName,
+    required this.name,
     required this.email,
-    required this.phone,
+    this.phone,
   });
+
+  String get fullName => name;
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id']?.toString() ?? json['userId']?.toString() ?? '',
-      fullName: json['fullName']?.toString() ?? json['name']?.toString() ?? '',
+      id: json['id'] ?? json['userId'] ?? '',
+      name: json['name']?.toString() ?? json['fullName']?.toString() ?? 'ScanGo Customer',
       email: json['email']?.toString() ?? '',
-      phone: json['phone']?.toString() ?? '',
+      phone: json['phone']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'fullName': fullName,
+      'name': name,
       'email': email,
       'phone': phone,
     };
@@ -32,8 +34,8 @@ class User {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is User && runtimeType == other.runtimeType && id == other.id;
+      other is User && runtimeType == other.runtimeType && id.toString() == other.id.toString();
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => id.toString().hashCode;
 }

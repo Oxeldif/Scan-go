@@ -1,56 +1,89 @@
 import 'package:flutter/foundation.dart';
+import '../models/order_receipt.dart';
 import '../models/payment_method.dart';
+import '../services/mock_payment_service.dart';
+import '../services/payment_api_service.dart';
 import '../services/payment_service.dart';
 
-enum PaymentProcessingStatus { idle, processing, success, failed }
+enum PaymentStatus { initial, processing, success, failed }
 
 class PaymentProvider extends ChangeNotifier {
-  final PaymentService _paymentService;
+  final PaymentService _mockService;
+  final PaymentApiService _apiService;
 
-  PaymentProvider(this._paymentService);
+  PaymentProvider({
+    PaymentService? mockService,
+    PaymentApiService? apiService,
+  })  : _mockService = mockService ?? MockPaymentService(),
+        _apiService = apiService ?? PaymentApiService();
 
-  PaymentMethod _selectedMethod = PaymentMethod.defaultMethods.first;
-  PaymentMethod get selectedMethod => _selectedMethod;
-
-  PaymentProcessingStatus _status = PaymentProcessingStatus.idle;
-  PaymentProcessingStatus get status => _status;
-
-  String? _transactionId;
-  String? get transactionId => _transactionId;
-
+  PaymentMethod _selectedMethod = PaymentMethod.defaultMethods[1]; // InstaPay by default
+  PaymentStatus _status = PaymentStatus.initial;
   String? _errorMessage;
+  OrderReceipt? _lastReceipt;
+
+  PaymentMethod get selectedMethod => _selectedMethod;
+  PaymentStatus get status => _status;
   String? get errorMessage => _errorMessage;
+  OrderReceipt? get lastReceipt => _lastReceipt;
 
   void selectPaymentMethod(PaymentMethod method) {
     _selectedMethod = method;
     notifyListeners();
   }
 
-  Future<PaymentResult> processPayment(double totalAmount, {bool simulateFailure = false}) async {
-    _status = PaymentProcessingStatus.processing;
+  Future<bool> processPayment({
+    required double amount,
+    bool isMock = false,
+  }) async {
+    _status = PaymentStatus.processing;
+    _errorMessage = null;
     notifyListeners();
 
-    final result = await _paymentService.processPayment(
-      method: _selectedMethod,
-      totalAmount: totalAmount,
-      shouldFail: simulateFailure,
+    if (isMock) {
+      final result = await _mockService.processPayment(
+        method: _selectedMethod,
+        totalAmount: amount,
+      );
+      if (result.isSuccess) {
+        _status = PaymentStatus.success;
+        _lastReceipt = OrderReceipt(
+          orderId: result.transactionId,
+          orderNumber: result.transactionId,
+          totalAmount: amount,
+          paymentMethod: _selectedMethod.name.toUpperCase(),
+          createdAt: DateTime.now(),
+        );
+        notifyListeners();
+        return true;
+      } else {
+        _status = PaymentStatus.failed;
+        _errorMessage = result.errorMessage ?? 'Payment failed.';
+        notifyListeners();
+        return false;
+      }
+    }
+
+    // Real backend checkout API call
+    final result = await _apiService.checkout(
+      paymentMethod: _selectedMethod,
     );
 
-    if (result.isSuccess) {
-      _status = PaymentProcessingStatus.success;
-      _transactionId = result.transactionId;
-      _errorMessage = null;
+    if (result.isSuccess && result.receipt != null) {
+      _status = PaymentStatus.success;
+      _lastReceipt = result.receipt;
+      notifyListeners();
+      return true;
     } else {
-      _status = PaymentProcessingStatus.failed;
-      _errorMessage = result.errorMessage;
+      _status = PaymentStatus.failed;
+      _errorMessage = result.errorMessage ?? 'Payment failed. Please try again.';
+      notifyListeners();
+      return false;
     }
-    notifyListeners();
-    return result;
   }
 
   void reset() {
-    _status = PaymentProcessingStatus.idle;
-    _transactionId = null;
+    _status = PaymentStatus.initial;
     _errorMessage = null;
     notifyListeners();
   }

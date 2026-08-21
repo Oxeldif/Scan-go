@@ -15,7 +15,7 @@ class FastMockAuthApiService extends AuthApiService {
     required String password,
   }) async {
     return AuthResult.success(
-      User(id: 'usr_reg_1', fullName: fullName, email: email, phone: phone),
+      User(id: 'usr_reg_1', name: fullName, email: email, phone: phone),
       'mock_token_reg',
     );
   }
@@ -26,20 +26,21 @@ class FastMockAuthApiService extends AuthApiService {
     required String password,
   }) async {
     return AuthResult.success(
-      User(id: 'usr_login_1', fullName: 'Test User', email: email, phone: ''),
+      User(id: 'usr_login_1', name: 'Test User', email: email, phone: ''),
       'mock_token_login',
     );
   }
 
   @override
-  Future<ShoppingSession?> createShoppingSession({
-    required String userId,
+  Future<ShoppingSession?> pairCart({
     String? cartCode,
+    bool faceVerified = false,
   }) async {
     return ShoppingSession(
       sessionId: 'sess_fast_123',
-      cartId: cartCode ?? 'cart_fast',
-      userId: userId,
+      cartCode: cartCode ?? 'CART_01',
+      userId: 'usr_reg_1',
+      faceVerified: faceVerified,
       createdAt: DateTime.now(),
     );
   }

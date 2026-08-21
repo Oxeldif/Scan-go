@@ -20,8 +20,6 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  bool _simulateFailure = false;
-
   void _handlePaymentSubmit() async {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final paymentProvider = Provider.of<PaymentProvider>(
@@ -29,21 +27,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       listen: false,
     );
 
-    final result = await paymentProvider.processPayment(
-      cartProvider.total,
-      simulateFailure: _simulateFailure,
+    final success = await paymentProvider.processPayment(
+      amount: cartProvider.total,
     );
 
     if (!mounted) return;
 
-    if (result.isSuccess) {
-      cartProvider.clearCart(); // Clear cart on success per requirement
+    if (success) {
+      cartProvider.clearCart();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const PaymentSuccessScreen()),
       );
     } else {
-      Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => const PaymentFailedScreen()));
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const PaymentFailedScreen()),
+      );
     }
   }
 
@@ -105,6 +103,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final cartProvider = Provider.of<CartProvider>(context);
     final paymentProvider = Provider.of<PaymentProvider>(context);
     final selectedMethod = paymentProvider.selectedMethod;
+    final isProcessing = paymentProvider.status == PaymentStatus.processing;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -128,86 +127,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const StepProgressBar(currentStep: 2),
               const SizedBox(height: 24),
 
-              // Order Summary Container
-              const Text(
-                'Order Summary',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 10),
+              // Total Calculation Card
               Container(
-                padding: const EdgeInsets.all(16),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FA),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.borderLight),
+                  color: AppColors.backgroundLight,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Sub total',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        Text(
-                          CurrencyFormatter.format(cartProvider.subtotal),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'Total Amount',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'tax(3%)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        Text(
-                          CurrencyFormatter.format(cartProvider.tax),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: Divider(height: 1, color: AppColors.borderLight),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Total',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          CurrencyFormatter.format(cartProvider.total),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      CurrencyFormatter.format(cartProvider.total),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -215,37 +160,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
               const SizedBox(height: 24),
 
-              // Payment Method Section
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'payment method',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  // Simulation Toggle for Testing
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _simulateFailure = !_simulateFailure;
-                      });
-                    },
-                    child: Text(
-                      _simulateFailure
-                          ? '[Simulating: FAIL]'
-                          : '[Simulating: SUCCESS]',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: _simulateFailure ? Colors.red : Colors.green,
-                      ),
-                    ),
-                  ),
-                ],
+              // Payment Method Section Title
+              const Text(
+                'Payment Method',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 10),
 
@@ -255,7 +177,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
               const Spacer(),
 
-              // Digital receipt note from screenshot
+              // Digital receipt note
               const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -265,7 +187,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      'Note: Your digital receipt will be sent after successful payment.',
+                      'Note: Your digital receipt and Exit Pass QR code will be generated immediately after payment.',
                       style: TextStyle(
                         fontSize: 10,
                         color: AppColors.textMuted,
@@ -279,15 +201,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
               // Next Button
               PrimaryButton(
-                label: 'Next',
-                isLoading:
-                    paymentProvider.status ==
-                    PaymentProcessingStatus.processing,
+                label: isProcessing ? 'Processing Payment...' : 'Next',
+                isLoading: isProcessing,
                 backgroundColor: AppColors.primaryGreenDark,
-                onPressed:
-                    paymentProvider.status == PaymentProcessingStatus.processing
-                    ? null
-                    : _handlePaymentSubmit,
+                onPressed: isProcessing ? null : _handlePaymentSubmit,
               ),
               const SizedBox(height: 12),
             ],

@@ -1,36 +1,47 @@
-import '../core/constants/app_constants.dart';
 import '../models/product.dart';
 
 class ProductRepository {
   static const Product doritos = Product(
-    id: AppConstants.doritosId,
+    id: 1,
     name: 'Nacho Cheese Doritos',
-    weight: '70g',
+    nameAr: 'دوريتوس فلفل حلو',
+    nameEn: 'Doritos Sweet Chili 95g',
+    barcode: '6221001004',
+    weightGrams: 70,
     price: 10.00,
-    imagePath: 'assets/doritos.png',
+    imageUrl: 'assets/doritos.png',
+    category: 'Snacks',
   );
 
   static const Product tuna = Product(
-    id: AppConstants.tunaId,
+    id: 2,
     name: 'Sunshine Tuna - Chunks',
-    weight: '185g',
+    nameAr: 'تونة صن شاين قطع',
+    nameEn: 'Sunshine Tuna Chunks 185g',
+    barcode: '6221001010',
+    weightGrams: 185,
     price: 65.00,
-    imagePath: 'assets/tuna.png',
+    imageUrl: 'assets/tuna.png',
+    category: 'Canned Food',
   );
 
   static const Product honey = Product(
-    id: AppConstants.honeyId,
+    id: 3,
     name: 'Imtenan Spring Flowers - Pure Bee Honey',
-    weight: '450g',
+    nameAr: 'عسل نحل امتنان زهور برية',
+    nameEn: 'Imtenan Bee Honey 450g',
+    barcode: '6221001011',
+    weightGrams: 450,
     price: 145.00,
-    imagePath: 'assets/honey.png',
+    imageUrl: 'assets/honey.png',
+    category: 'Honey',
   );
 
   static List<Product> get catalog => [doritos, tuna, honey];
 
-  static Product? findById(String id) {
+  static Product? findById(dynamic id) {
     try {
-      return catalog.firstWhere((p) => p.id == id);
+      return catalog.firstWhere((p) => p.id.toString() == id.toString());
     } catch (_) {
       return null;
     }

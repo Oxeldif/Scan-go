@@ -63,14 +63,14 @@ class AuthApiService {
     final token = payload['token']?.toString() ?? '';
     final user = User(
       id: userJson['id']?.toString() ?? userJson['userId']?.toString() ?? '',
-      fullName: userJson['name']?.toString() ??
+      name: userJson['name']?.toString() ??
           userJson['fullName']?.toString() ??
           fallbackName,
       email: userJson['email']?.toString() ?? fallbackEmail,
       phone: userJson['phone']?.toString() ?? fallbackPhone,
     );
 
-    if (user.id.isEmpty || token.isEmpty) {
+    if (user.id.toString().isEmpty || token.isEmpty) {
       return AuthResult.failure('Login succeeded but token was missing.');
     }
 

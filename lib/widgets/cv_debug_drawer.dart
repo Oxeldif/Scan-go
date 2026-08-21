@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../repositories/product_repository.dart';
-import '../services/cart/cart_api_service.dart';
+import '../services/cart_api_service.dart';
 import '../services/mock_computer_vision_service.dart';
-import '../state/auth_provider.dart';
+import '../state/cart_provider.dart';
 
 class CvDebugPanel extends StatelessWidget {
   final MockComputerVisionService cvService;
@@ -21,20 +21,19 @@ class CvDebugPanel extends StatelessWidget {
     String? label,
     String action = 'added',
   }) {
-    final cartApiService = Provider.of<CartApiService>(context, listen: false);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final cartCode = authProvider.currentSession?.cartCode ?? 'CART_01';
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final cartCode = cartProvider.cartCode ?? 'CART_01';
 
-    // 1. Send real AI Webhook to backend if available
-    cartApiService.sendAiDetectionWebhook(
-      cartCode: cartCode,
-      productId: productId,
-      barcode: barcode,
-      label: label,
-      action: action,
-    );
+    try {
+      final cartApiService = Provider.of<CartApiService>(context, listen: false);
+      cartApiService.simulateAiDetection(
+        cartCode: cartCode,
+        productId: productId is int ? productId : int.tryParse(productId.toString()) ?? 1,
+        action: action,
+      );
+    } catch (_) {}
 
-    // 2. Also emit locally for offline testing
+    // Also emit locally for offline testing
     if (action == 'added') {
       if (productId == ProductRepository.doritos.id || label?.contains('Doritos') == true) {
         cvService.simulateAddProduct(ProductRepository.doritos);

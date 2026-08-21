@@ -32,15 +32,15 @@ class FastMockAuthApiService extends AuthApiService {
   }
 
   @override
-  Future<ShoppingSession?> pairCart({
+  Future<ShoppingSession?> createShoppingSession({
+    required String userId,
     String? cartCode,
-    bool faceVerified = false,
   }) async {
     return ShoppingSession(
       sessionId: 'sess_fast_123',
-      cartCode: cartCode ?? 'CART_01',
-      userId: 'usr_reg_1',
-      faceVerified: faceVerified,
+      cartId: cartCode ?? 'CART_01',
+      userId: userId,
+      faceVerified: false,
       createdAt: DateTime.now(),
     );
   }

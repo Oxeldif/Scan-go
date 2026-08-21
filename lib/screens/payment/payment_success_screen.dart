@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../core/utils/currency_formatter.dart';
 import '../../state/auth_provider.dart';
 import '../../state/cart_provider.dart';
 import '../../state/payment_provider.dart';
@@ -59,7 +58,8 @@ class PaymentSuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final paymentProvider = Provider.of<PaymentProvider>(context);
-    final receipt = paymentProvider.lastReceipt;
+    final orderNumber = paymentProvider.orderNumber ?? 'ORD-SCAN-GO';
+    final exitQrCode = paymentProvider.exitQrCode;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -118,9 +118,7 @@ class PaymentSuccessScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      receipt != null
-                          ? 'Order #${receipt.orderNumber} • ${CurrencyFormatter.format(receipt.totalAmount)}'
-                          : 'Payment completed successfully.',
+                      'Order #$orderNumber',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 13,
@@ -132,8 +130,8 @@ class PaymentSuccessScreen extends StatelessWidget {
 
                     // Exit QR Code section
                     _buildExitQrCode(
-                      receipt?.exitQrCode,
-                      receipt?.orderNumber ?? 'ORD-SCAN-GO',
+                      exitQrCode,
+                      orderNumber,
                     ),
                     const SizedBox(height: 10),
 

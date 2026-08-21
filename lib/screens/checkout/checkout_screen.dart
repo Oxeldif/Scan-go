@@ -27,13 +27,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       listen: false,
     );
 
-    final success = await paymentProvider.processPayment(
-      amount: cartProvider.total,
-    );
+    final result = await paymentProvider.processPayment(cartProvider.total);
 
     if (!mounted) return;
 
-    if (success) {
+    if (result.isSuccess) {
       cartProvider.clearCart();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const PaymentSuccessScreen()),
@@ -103,7 +101,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final cartProvider = Provider.of<CartProvider>(context);
     final paymentProvider = Provider.of<PaymentProvider>(context);
     final selectedMethod = paymentProvider.selectedMethod;
-    final isProcessing = paymentProvider.status == PaymentStatus.processing;
+    final isProcessing = paymentProvider.status == PaymentProcessingStatus.processing;
 
     return Scaffold(
       backgroundColor: Colors.white,

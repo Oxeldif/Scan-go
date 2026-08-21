@@ -16,7 +16,7 @@ class MockComputerVisionService implements ComputerVisionService {
     _controller.add(CvEvent.detected(product));
   }
 
-  void simulateRemoveProduct(String productId) {
+  void simulateRemoveProduct(dynamic productId) {
     _controller.add(CvEvent.removed(productId));
   }
 

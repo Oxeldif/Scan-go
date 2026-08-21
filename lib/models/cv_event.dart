@@ -5,7 +5,7 @@ enum CvEventType { productDetected, productRemoved, cartCleared }
 class CvEvent {
   final CvEventType type;
   final Product? product;
-  final String? productId;
+  final dynamic productId;
 
   const CvEvent({
     required this.type,
@@ -18,7 +18,7 @@ class CvEvent {
         product: product,
       );
 
-  factory CvEvent.removed(String productId) => CvEvent(
+  factory CvEvent.removed(dynamic productId) => CvEvent(
         type: CvEventType.productRemoved,
         productId: productId,
       );

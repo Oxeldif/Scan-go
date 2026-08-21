@@ -7,6 +7,7 @@ import { socketService } from '../services/socketService';
 export class CartController {
   /**
    * Pair mobile app with physical cart via QR code (cartCode: "CART_01")
+   * Accepts optional faceVerified boolean
    */
   static async pairCart(req: AuthRequest, res: Response) {
     try {
@@ -15,7 +16,7 @@ export class CartController {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
       }
 
-      const { cartCode } = req.body;
+      const { cartCode, faceVerified = false } = req.body;
       if (!cartCode) {
         return res.status(400).json({
           success: false,
@@ -49,6 +50,11 @@ export class CartController {
       });
 
       if (currentActiveSession && currentActiveSession.cartId === cart.id) {
+        // Update Face ID status if passed
+        if (faceVerified && !currentActiveSession.faceVerified) {
+          await CartService.verifySessionFace(currentActiveSession.id);
+        }
+
         const sessionData = await CartService.getActiveSessionByUserId(userId);
         const formatted = CartService.formatCartResponse(sessionData);
 
@@ -85,6 +91,8 @@ export class CartController {
           userId,
           cartId: cart.id,
           status: 'ACTIVE',
+          faceVerified: Boolean(faceVerified),
+          faceVerifiedAt: faceVerified ? new Date() : null,
         },
         include: {
           cart: true,
@@ -112,6 +120,50 @@ export class CartController {
       return res.status(500).json({
         success: false,
         message: 'Failed to pair with cart',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Verify Face ID for active cart session
+   */
+  static async verifyFace(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
+      const activeSession = await CartService.getActiveSessionByUserId(userId);
+      if (!activeSession) {
+        return res.status(404).json({
+          success: false,
+          message: 'No active cart session found to verify Face ID.',
+        });
+      }
+
+      const updatedSession = await CartService.verifySessionFace(activeSession.id);
+      const formatted = CartService.formatCartResponse(updatedSession);
+
+      if (activeSession.cart?.cartCode) {
+        socketService.emitToCart(activeSession.cart.cartCode, 'cart:face_verified', {
+          cartCode: activeSession.cart.cartCode,
+          cart: formatted,
+        });
+      }
+      socketService.emitToUser(userId, 'cart:face_verified', formatted);
+
+      return res.json({
+        success: true,
+        message: 'Face ID verified successfully! Session secured.',
+        data: formatted,
+      });
+    } catch (error: any) {
+      console.error('Error verifying face:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to verify Face ID',
         error: error.message,
       });
     }

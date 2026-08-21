@@ -97,6 +97,8 @@ export class CartService {
       cartCode: session.cart?.cartCode || null,
       cartStatus: session.cart?.status || null,
       sessionStatus: session.status,
+      faceVerified: Boolean(session.faceVerified),
+      faceVerifiedAt: session.faceVerifiedAt || null,
       startedAt: session.startedAt,
       itemsCount: totalItems,
       items: formattedItems,
@@ -106,6 +108,24 @@ export class CartService {
       estimatedWeightGrams: totalWeightGrams,
       user: session.user || undefined,
     };
+  }
+
+  /**
+   * Mark session Face ID as verified
+   */
+  static async verifySessionFace(sessionId: number) {
+    return prisma.shoppingSession.update({
+      where: { id: sessionId },
+      data: {
+        faceVerified: true,
+        faceVerifiedAt: new Date(),
+      },
+      include: {
+        cart: true,
+        user: { select: { id: true, name: true, email: true } },
+        items: { include: { product: true } },
+      },
+    });
   }
 
   /**

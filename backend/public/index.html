@@ -146,6 +146,7 @@
       flex-direction: column;
       height: 640px;
       box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.7);
+      position: relative;
     }
 
     .mobile-topbar {
@@ -165,6 +166,19 @@
       border-radius: 12px;
       font-size: 0.75rem;
       font-weight: 700;
+    }
+
+    .face-badge {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 0.15rem 0.45rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
     }
 
     .mobile-content {
@@ -449,6 +463,7 @@
     .tag-ai { background: #10b981; color: #0b0f19; }
     .tag-pay { background: #f59e0b; color: #0b0f19; }
     .tag-cart { background: #8b5cf6; color: #fff; }
+    .tag-face { background: #ec4899; color: #fff; }
 
     /* Modals */
     .modal-overlay {
@@ -479,6 +494,26 @@
       gap: 1rem;
       text-align: center;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Face ID Animation Scanner */
+    .face-scanner-box {
+      width: 140px;
+      height: 140px;
+      border: 3px dashed var(--accent);
+      border-radius: 50%;
+      margin: 1rem auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: rgba(34, 197, 94, 0.05);
+      animation: pulseGlow 1.5s infinite alternate;
+    }
+
+    @keyframes pulseGlow {
+      from { box-shadow: 0 0 10px rgba(34, 197, 94, 0.2); }
+      to { box-shadow: 0 0 25px rgba(34, 197, 94, 0.6); }
     }
 
     .modal-qr {
@@ -532,14 +567,17 @@
             <option value="CART_02">سلة CART_02</option>
             <option value="CART_03">سلة CART_03</option>
           </select>
-          <button class="btn btn-primary btn-sm" id="btnPairCart" onclick="pairSelectedCart()">ربط السلة (Scan QR)</button>
+          <button class="btn btn-primary btn-sm" id="btnPairCart" onclick="startCartPairingWithFaceID()">ربط السلة (Scan QR)</button>
         </div>
       </div>
 
       <div class="mobile-frame">
         <div class="mobile-topbar">
           <div>
-            <span style="font-weight: 700;">مرحباً، أحمد 👋</span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="font-weight: 700;">أحمد محمد 👋</span>
+              <span class="face-badge" id="faceIdStatusBadge">👤 Face ID غير مُمكّن</span>
+            </div>
             <div style="font-size: 0.75rem; color: #94a3b8;" id="activeCartDisplay">السلة: CART_01 (نشطة)</div>
           </div>
           <span class="mobile-cart-badge" id="cartCountBadge">0 عناصر</span>
@@ -608,6 +646,29 @@ POST /api/ai/detection
       </div>
     </div>
   </main>
+
+  <!-- Face ID Simulation Modal -->
+  <div class="modal-overlay" id="faceIdModal">
+    <div class="modal">
+      <h2 style="font-size: 1.2rem; color: var(--primary);">👤 تحقق الأمان - Face ID</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">جاري فتح الكاميرا الأمامية للتحقق من هوية المستخدم...</p>
+
+      <div class="face-scanner-box">
+        <svg width="60" height="60" fill="none" viewBox="0 0 24 24" stroke="var(--accent)" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
+      </div>
+
+      <div style="font-size: 0.9rem; font-weight: 700; color: var(--accent);" id="faceScanningStatus">
+        جاري مسح ملامح الوجه...
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+        <button class="btn btn-success" style="flex: 1;" onclick="confirmFaceIdAndPair()">موافق (تأكيد Face ID)</button>
+        <button class="btn btn-outline" onclick="closeFaceIdModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Checkout & Exit QR Modal -->
   <div class="modal-overlay" id="checkoutModal">
@@ -678,7 +739,7 @@ POST /api/ai/detection
       initSocket();
       await autoLogin();
       await fetchProducts();
-      await pairSelectedCart();
+      await pairSelectedCart(false);
     });
 
     function log(tag, message, tagClass = 'tag-socket') {
@@ -706,7 +767,6 @@ POST /api/ai/detection
         if (text) text.innerText = 'متصل بالـ WebSockets';
         log('SOCKET', `تم الاتصال بالخادم بنجاح (ID: ${socket.id})`, 'tag-socket');
 
-        // Join room for default cart
         socket.emit('join:cart', currentCartCode);
       });
 
@@ -729,6 +789,13 @@ POST /api/ai/detection
         log('CART', `تم ربط السلة ${data.cartCode || currentCartCode}`, 'tag-cart');
         if (data.session) {
           renderCart(data.session);
+        }
+      });
+
+      socket.on('cart:face_verified', (data) => {
+        log('FACE-ID', `تم التحقق من الوجه بنجاح لـ ${data.cartCode}`, 'tag-face');
+        if (data.cart) {
+          renderCart(data.cart);
         }
       });
 
@@ -786,7 +853,22 @@ POST /api/ai/detection
       });
     }
 
-    async function pairSelectedCart() {
+    function startCartPairingWithFaceID() {
+      document.getElementById('faceIdModal').classList.add('active');
+      document.getElementById('faceScanningStatus').innerText = 'جاري مسح ملامح الوجه بالموبايل...';
+    }
+
+    function closeFaceIdModal() {
+      document.getElementById('faceIdModal').classList.remove('active');
+    }
+
+    async function confirmFaceIdAndPair() {
+      closeFaceIdModal();
+      log('FACE-ID', 'تم التقاط صورة الوجه والتحقق من الهوية ✓', 'tag-face');
+      await pairSelectedCart(true);
+    }
+
+    async function pairSelectedCart(faceVerified = false) {
       const selector = document.getElementById('cartSelector');
       if (selector) currentCartCode = selector.value;
       if (!authToken) return;
@@ -798,7 +880,7 @@ POST /api/ai/detection
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authToken}`
           },
-          body: JSON.stringify({ cartCode: currentCartCode })
+          body: JSON.stringify({ cartCode: currentCartCode, faceVerified })
         });
         const data = await res.json();
         if (data.success) {
@@ -889,11 +971,26 @@ POST /api/ai/detection
       const subtotalDisp = document.getElementById('subtotalDisplay');
       const totalDisp = document.getElementById('grandTotalDisplay');
       const btnCheckout = document.getElementById('btnCheckout');
+      const faceBadge = document.getElementById('faceIdStatusBadge');
 
       if (countBadge) countBadge.innerText = `${cart.itemsCount || 0} عناصر`;
       if (subtotalDisp) subtotalDisp.innerText = `${(cart.subtotal || 0).toFixed(2)} ج.م`;
       if (totalDisp) totalDisp.innerText = `${(cart.grandTotal || 0).toFixed(2)} ج.م`;
       currentGrandTotal = cart.grandTotal || 0;
+
+      if (faceBadge) {
+        if (cart.faceVerified) {
+          faceBadge.innerText = '👤 Face ID مؤكّد ✓';
+          faceBadge.style.color = '#22c55e';
+          faceBadge.style.borderColor = '#22c55e';
+          faceBadge.style.background = 'rgba(34, 197, 94, 0.15)';
+        } else {
+          faceBadge.innerText = '👤 Face ID غير مُمكّن';
+          faceBadge.style.color = '#94a3b8';
+          faceBadge.style.borderColor = '#475569';
+          faceBadge.style.background = 'rgba(255, 255, 255, 0.05)';
+        }
+      }
 
       if (!container) return;
 
@@ -992,7 +1089,7 @@ POST /api/ai/detection
     function finishShopping() {
       const modal = document.getElementById('receiptModal');
       if (modal) modal.classList.remove('active');
-      pairSelectedCart();
+      pairSelectedCart(false);
     }
   </script>
 </body>

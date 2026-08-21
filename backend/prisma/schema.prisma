@@ -43,16 +43,18 @@ model Cart {
 }
 
 model ShoppingSession {
-  id          Int        @id @default(autoincrement())
-  userId      Int
-  cartId      Int
-  status      String     @default("ACTIVE") // "ACTIVE", "COMPLETED", "CANCELLED"
-  startedAt   DateTime   @default(now())
-  completedAt DateTime?
-  user        User       @relation(fields: [userId], references: [id])
-  cart        Cart       @relation(fields: [cartId], references: [id])
-  items       CartItem[]
-  orders      Order[]
+  id             Int        @id @default(autoincrement())
+  userId         Int
+  cartId         Int
+  status         String     @default("ACTIVE") // "ACTIVE", "COMPLETED", "CANCELLED"
+  faceVerified   Boolean    @default(false)
+  faceVerifiedAt DateTime?
+  startedAt      DateTime   @default(now())
+  completedAt    DateTime?
+  user           User       @relation(fields: [userId], references: [id])
+  cart           Cart       @relation(fields: [cartId], references: [id])
+  items          CartItem[]
+  orders         Order[]
 }
 
 model CartItem {

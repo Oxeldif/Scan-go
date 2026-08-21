@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticateJWT);
 
 router.post('/pair', CartController.pairCart);
+router.post('/verify-face', CartController.verifyFace);
 router.get('/active', CartController.getActiveCart);
 router.post('/add-item', CartController.addItem);
 router.post('/remove-item', CartController.removeItem);

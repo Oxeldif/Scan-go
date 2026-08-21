@@ -62,10 +62,6 @@ class LocalAuthFaceRecognitionService implements FaceRecognitionService {
 
       final bool authenticated = await _auth.authenticate(
         localizedReason: 'Please authenticate to access your ScanGo account.',
-        options: const AuthenticationOptions(
-          biometricOnly: false,
-          stickyAuth: true,
-        ),
       );
 
       if (authenticated) {

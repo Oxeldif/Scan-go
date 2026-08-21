@@ -28,9 +28,10 @@ class AuthProvider extends ChangeNotifier {
     required this.faceService,
     AuthApiService? authApiService,
     TokenStorageService? tokenStorage,
-    this._socketCartService,
+    SocketCartService? socketCartService,
   })  : _authApiService = authApiService ?? AuthApiService(),
-        _tokenStorage = tokenStorage ?? TokenStorageService();
+        _tokenStorage = tokenStorage ?? TokenStorageService(),
+        _socketCartService = socketCartService;
 
   AuthStatus _status = AuthStatus.initial;
   AuthStatus get status => _status;
@@ -235,9 +236,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _connectSocket() {
-    if (_socketCartService != null && _currentUser != null) {
-      _socketCartService.connect(
-        userId: _currentUser!.id,
+    final socket = _socketCartService;
+    final user = _currentUser;
+    if (socket != null && user != null) {
+      socket.connect(
+        userId: user.id,
         cartCode: _currentSession?.cartCode ?? 'CART_01',
       );
     }

@@ -23,10 +23,12 @@ class CartProvider extends ChangeNotifier {
   bool _isLoading = false;
 
   CartProvider({
-    this._cvService,
+    ComputerVisionService? cvService,
     CartApiService? cartApiService,
-    this._socketCartService,
-  })  : _cartApiService = cartApiService ?? CartApiService() {
+    SocketCartService? socketCartService,
+  })  : _cvService = cvService,
+        _cartApiService = cartApiService ?? CartApiService(),
+        _socketCartService = socketCartService {
     _initListeners();
   }
 
@@ -51,8 +53,9 @@ class CartProvider extends ChangeNotifier {
 
   void _initListeners() {
     // 1. Listen for Real-Time Socket.io Cart Updates from Backend
-    if (_socketCartService != null) {
-      _socketSubscription = _socketCartService.onCartUpdate.listen((event) {
+    final socket = _socketCartService;
+    if (socket != null) {
+      _socketSubscription = socket.onCartUpdate.listen((event) {
         debugPrint('🛒 [CartProvider] Received Socket Cart Update: ${event.action}');
 
         if (event.updatedCart != null) {
@@ -71,8 +74,9 @@ class CartProvider extends ChangeNotifier {
     }
 
     // 2. Listen for Local / Simulated CV Events if present
-    if (_cvService != null) {
-      _cvSubscription = _cvService.eventStream.listen((event) {
+    final cv = _cvService;
+    if (cv != null) {
+      _cvSubscription = cv.eventStream.listen((event) {
         _lastEvent = event;
         _lastDetectedProduct = event.product;
         _handleLocalCvEvent(event);

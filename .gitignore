@@ -1,3 +1,11 @@
+# Python virtual environments & cache
+venv/
+.venv/
+ai_vision/venv/
+ai_vision/.venv/
+__pycache__/
+*.pyc
+
 # Document files
 *.pdf
 *.docx

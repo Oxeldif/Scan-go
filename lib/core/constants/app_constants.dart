@@ -20,7 +20,7 @@ class AppConstants {
     defaultValue: false,
   );
 
-  static String _apiBaseUrl = '';
+  static String _apiBaseUrl = 'https://cytoplast-courier-dandelion.ngrok-free.dev/api';
 
   static String get apiBaseUrl {
     if (_apiBaseUrl.isNotEmpty) return _apiBaseUrl;

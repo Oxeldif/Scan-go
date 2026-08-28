@@ -16,29 +16,38 @@ export class OrderController {
       }
       const userId = req.user.id;
 
-      const { paymentMethod = 'INSTAPAY', notes } = req.body;
-      const validMethods = ['INSTAPAY', 'VODAFONE_CASH', 'VISA', 'CASH'];
+      const { paymentMethod = 'INSTAPAY', cartCode, cart_code, notes } = req.body;
 
-      const normalizedMethod = paymentMethod.toString().toUpperCase();
-      if (!validMethods.includes(normalizedMethod)) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid payment method. Choose from: ${validMethods.join(', ')}`,
-        });
+      // Flexibly normalize payment method
+      let normalizedMethod = (paymentMethod || 'INSTAPAY').toString().toUpperCase().trim();
+      if (normalizedMethod.includes('VODAFONE')) normalizedMethod = 'VODAFONE_CASH';
+      else if (normalizedMethod.includes('INSTA')) normalizedMethod = 'INSTAPAY';
+      else if (normalizedMethod.includes('VISA') || normalizedMethod.includes('CARD') || normalizedMethod.includes('CREDIT')) normalizedMethod = 'VISA';
+      else if (normalizedMethod.includes('CASH')) normalizedMethod = 'CASH';
+      else normalizedMethod = 'INSTAPAY';
+
+      // 1. Try to find active session by userId
+      let activeSession = await CartService.getActiveSessionByUserId(userId);
+
+      // 2. Fallback: Try to find active session by cart code if specified or default
+      const targetCartCode = cartCode || cart_code || (activeSession ? activeSession.cart.cartCode : 'CART_01');
+      if (!activeSession || activeSession.items.length === 0) {
+        const sessionByCart = await CartService.getActiveSessionByCartCode(targetCartCode);
+        if (sessionByCart && sessionByCart.items.length > 0) {
+          activeSession = sessionByCart;
+        }
       }
 
-      // Get active session
-      const activeSession = await CartService.getActiveSessionByUserId(userId);
-      if (!activeSession || activeSession.items.length === 0) {
+      if (!activeSession || !activeSession.items || activeSession.items.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Cannot checkout: Your cart is empty or no active session exists.',
+          message: `Cannot checkout: Cart ${targetCartCode} is empty or no active shopping session exists. Please add products first.`,
         });
       }
 
       const formattedCart = CartService.formatCartResponse(activeSession);
-      if (!formattedCart) {
-        return res.status(400).json({ success: false, message: 'Invalid cart state.' });
+      if (!formattedCart || formattedCart.grandTotal <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid cart total or empty cart.' });
       }
 
       // Generate unique order number (e.g. "ORD-2026-94812")

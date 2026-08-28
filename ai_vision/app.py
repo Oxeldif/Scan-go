@@ -29,18 +29,28 @@ opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 opts.intra_op_num_threads = 4
 
 session = ort.InferenceSession(MODEL_PATH, sess_options=opts, providers=["CPUExecutionProvider"])
-input_name = session.get_inputs()[0].name
+input_node = session.get_inputs()[0]
+input_name = input_node.name
 output_name = session.get_outputs()[0].name
+
+# Detect model input size dynamically (e.g. 320x320 vs 640x640)
+try:
+    MODEL_INPUT_SIZE = int(input_node.shape[2])
+    if MODEL_INPUT_SIZE <= 0:
+        MODEL_INPUT_SIZE = 320
+except Exception:
+    MODEL_INPUT_SIZE = 320
 
 # 3. Backend URL (can be overridden via environment variable)
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5001/api/ai/detection")
 
 print(f"✅ [AI Service] Model loaded successfully from {MODEL_PATH}")
+print(f"📐 [AI Service] Model Input Dimensions: {input_node.shape} -> target: {MODEL_INPUT_SIZE}x{MODEL_INPUT_SIZE}")
 print(f"📦 [AI Service] Supported Classes: {CLASSES}")
 print(f"📡 [AI Service] Target Backend API: {BACKEND_URL}")
 
 
-def preprocess_image(image_bytes: bytes, input_size: int = 640):
+def preprocess_image(image_bytes: bytes, input_size: int = MODEL_INPUT_SIZE):
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     frame = np.array(image)
     oh, ow = frame.shape[:2]
@@ -63,6 +73,7 @@ def home():
     return {
         "status": "Online",
         "service": "Scan & Go AI Vision Service",
+        "model_input_size": MODEL_INPUT_SIZE,
         "classes": CLASSES,
         "backend_url": BACKEND_URL
     }
@@ -91,8 +102,8 @@ async def predict_product(
         if not contents or len(contents) == 0:
             return {"success": False, "message": "Empty image payload received"}
 
-        # 1. Preprocess and Run ONNX Inference
-        blob = preprocess_image(contents)
+        # 1. Preprocess using model's exact input size (320x320)
+        blob = preprocess_image(contents, MODEL_INPUT_SIZE)
         outputs = session.run([output_name], {input_name: blob})[0]
 
         predictions = outputs[0]
